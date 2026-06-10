@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My City Events</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 1rem; }
+    .event { border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
+    .hidden-loc { color: #888; }
+    button { padding: 0.3rem 0.8rem; margin-right: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>🎉 Local Events</h1>
+  <a href="/create.html">+ Add an event</a> |
+  <a href="/pending.html">Approve pending events</a>
+  <hr>
+  <div id="events">Loading...</div>
+
+  <script>
+    const API_BASE = '/api'; // Same origin, no need for full URL
+
+    async function fetchJSON(path) {
+      const res = await fetch(API_BASE + path);
+      return res.json();
+    }
+
+    async function loadEvents() {
+      const events = await fetchJSON('/events');
+      const container = document.getElementById('events');
+      if (!events.length) {
+        container.innerHTML = '<p>No upcoming events.</p>';
+        return;
+      }
+      container.innerHTML = events.map(e => `
+        <div class="event">
+          <h3>${escapeHtml(e.title)}</h3>
+          <p>${escapeHtml(e.description || '')}</p>
+          <p>📅 ${new Date(e.event_date).toLocaleString()}</p>
+          ${e.latitude ? `<p>📍 Location visible</p>` : '<p class="hidden-loc">📍 Location hidden (password required)</p>'}
+          ${e.link ? `<p><a href="${escapeHtml(e.link)}" target="_blank">More info</a></p>` : ''}
+          <button onclick="reportEvent(${e.id})">🚩 Report</button>
+        </div>
+      `).join('');
+    }
+
+    async function reportEvent(id) {
+      await fetch(`${API_BASE}/events/${id}/report`, { method: 'POST' });
+      alert('Reported. If enough reports, the event will be hidden.');
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    loadEvents();
+  </script>
+</body>
+</html>

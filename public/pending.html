@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pending Events</title>
+  <style>
+    body { font-family: system-ui; max-width: 800px; margin: 0 auto; padding: 1rem; }
+    .event { border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <h2>Events waiting for approval</h2>
+  <div id="pending"></div>
+  <a href="/">← Back to events</a>
+
+  <script>
+    async function loadPending() {
+      const res = await fetch('/api/events/pending');
+      const events = await res.json();
+      const container = document.getElementById('pending');
+      if (!events.length) {
+        container.innerHTML = '<p>No pending events.</p>';
+        return;
+      }
+      container.innerHTML = events.map(e => `
+        <div class="event">
+          <h3>${e.title}</h3>
+          <p>${e.description || ''}</p>
+          <p>📅 ${new Date(e.event_date).toLocaleString()}</p>
+          <p>Approvals: ${e.approvals}/10</p>
+          <button onclick="approve(${e.id})">✅ Approve</button>
+        </div>
+      `).join('');
+    }
+
+    async function approve(id) {
+      await fetch(`/api/events/${id}/approve`, { method: 'POST' });
+      alert('Approved!');
+      loadPending(); // refresh
+    }
+
+    loadPending();
+  </script>
+</body>
+</html>

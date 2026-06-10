@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Event</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body { font-family: system-ui; max-width: 600px; margin: 0 auto; padding: 1rem; }
+    label { display: block; margin-top: 0.5rem; }
+    #map { height: 300px; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <h2>Add a new event</h2>
+  <form id="createForm">
+    <label>Title: <input name="title" required></label>
+    <label>Description: <textarea name="description"></textarea></label>
+    <label>Date & time: <input type="datetime-local" name="event_date" required></label>
+    <label>Hide exact location? <input type="checkbox" name="hide_location"></label>
+    <label>Link: <input type="url" name="link"></label>
+    <label>Image URL: <input type="url" name="image_url"></label>
+    <label>Event password (for editing): <input type="password" name="password" required></label>
+    
+    <p>Click on the map to place the event location (allowed only inside the circle):</p>
+    <div id="map"></div>
+    <input type="hidden" name="latitude" id="lat">
+    <input type="hidden" name="longitude" id="lng">
+
+    <div class="g-recaptcha" data-sitekey="6Lf9uxctAAAAAP38JTMm0JuZNkihWaNUMEkyDDlf"></div>
+    <button type="submit">Submit Event</button>
+  </form>
+  <a href="/">← Back to events</a>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+  <script>
+    // City centre and radius (must match your worker constants)
+    const CENTER_LAT = 45.4642;
+    const CENTER_LON = 9.1900;
+    const RADIUS_KM = 15;
+
+    // Initialize map
+    const map = L.map('map').setView([CENTER_LAT, CENTER_LON], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Draw allowed area circle
+    L.circle([CENTER_LAT, CENTER_LON], {
+      radius: RADIUS_KM * 1000,
+      color: 'blue',
+      fillOpacity: 0.05
+    }).addTo(map);
+
+    let marker;
+    map.on('click', function(e) {
+      const lat = e.latlng.lat;
+      const lng = e.latlng.lng;
+      // Check distance (rough, server will verify precisely)
+      const dLat = (lat - CENTER_LAT) * Math.PI / 180;
+      const dLon = (lng - CENTER_LON) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2 + Math.cos(CENTER_LAT*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLon/2)**2;
+      const dist = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      if (dist > RADIUS_KM) {
+        alert('Location is outside the allowed area. Please pick a point inside the blue circle.');
+        return;
+      }
+      if (marker) map.removeLayer(marker);
+      marker = L.marker([lat, lng]).addTo(map);
+      document.getElementById('lat').value = lat;
+      document.getElementById('lng').value = lng;
+    });
+
+    // Submit form
+    document.getElementById('createForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+      // Build JSON payload
+      const payload = {
+        title: data.title,
+        description: data.description || undefined,
+        event_date: data.event_date,
+        latitude: data.latitude ? parseFloat(data.latitude) : undefined,
+        longitude: data.longitude ? parseFloat(data.longitude) : undefined,
+        hide_location: data.hide_location === 'on',
+        link: data.link || undefined,
+        image_url: data.image_url || undefined,
+        password: data.password,
+        recaptcha: grecaptcha.getResponse()
+      };
+
+      const res = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (res.ok) {
+        alert('Event created! It will appear after 10 approvals.');
+        window.location.href = '/';
+      } else {
+        alert('Error: ' + result.error);
+      }
+    });
+  </script>
+</body>
+</html>
