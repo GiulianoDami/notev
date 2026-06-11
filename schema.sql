@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS events (
   hide_location INTEGER DEFAULT 0,
   link TEXT,
   image_url TEXT,
-  password_hash TEXT NOT NULL,
+  password_hash TEXT NOT NULL,              -- for editing
+  location_password_hash TEXT,              -- NEW: for revealing hidden location
   status TEXT DEFAULT 'pending',
   approvals INTEGER DEFAULT 0,
   reports INTEGER DEFAULT 0,
@@ -19,7 +20,7 @@ CREATE TABLE IF NOT EXISTS votes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   event_id INTEGER NOT NULL,
   ip TEXT NOT NULL,
-  vote_type TEXT NOT NULL,  -- 'approve' or 'report'
+  vote_type TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(event_id, ip, vote_type)
 );

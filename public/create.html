@@ -17,7 +17,14 @@
     <label>Title: <input name="title" required></label>
     <label>Description: <textarea name="description"></textarea></label>
     <label>Date & time: <input type="datetime-local" name="event_date" required></label>
-    <label>Hide exact location? <input type="checkbox" name="hide_location"></label>
+    <label>Hide exact location? <input type="checkbox" name="hide_location" id="hideLocationCheck"></label>
+
+    <div id="locationPasswordGroup" style="display:none;">
+      <label>Location password (to share with attendees): 
+        <input type="password" name="location_password" placeholder="e.g., 'garden-party'">
+      </label>
+    </div>
+
     <label>Link: <input type="url" name="link"></label>
     <label>Image URL: <input type="url" name="image_url"></label>
     <label>Event password (for editing): <input type="password" name="password" required></label>
@@ -36,9 +43,9 @@
   <script src="https://www.google.com/recaptcha/api.js" async defer></script>
   <script>
     // City centre and radius (must match your worker constants)
-    const CENTER_LAT = 45.4642;
-    const CENTER_LON = 9.1900;
-    const RADIUS_KM = 15;
+    const CENTER_LAT = 43.7166;
+    const CENTER_LON = 10.4000;
+    const RADIUS_KM = 60;
 
     // Initialize map
     const map = L.map('map').setView([CENTER_LAT, CENTER_LON], 13);
@@ -88,7 +95,8 @@
         link: data.link || undefined,
         image_url: data.image_url || undefined,
         password: data.password,
-        recaptcha: grecaptcha.getResponse()
+        recaptcha: grecaptcha.getResponse(),
+        location_password: data.hide_location ? data.location_password : undefined,
       };
 
       const res = await fetch('/api/events', {
@@ -103,6 +111,10 @@
       } else {
         alert('Error: ' + result.error);
       }
+    });
+
+    document.getElementById('hideLocationCheck').addEventListener('change', function() {
+      document.getElementById('locationPasswordGroup').style.display = this.checked ? 'block' : 'none';
     });
   </script>
 </body>

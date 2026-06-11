@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edit Event</title>
+  <style>
+    body { font-family: system-ui; max-width: 600px; margin: 0 auto; padding: 1rem; }
+    label { display: block; margin-top: 0.5rem; }
+    input, textarea, select { width: 100%; padding: 0.3rem; }
+    button { margin-top: 1rem; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h2>Edit Event</h2>
+  <div id="auth">
+    <label>Event password: <input type="password" id="password" required></label>
+    <button onclick="loadEventData()">Load event</button>
+    <p class="error" id="auth-error"></p>
+  </div>
+
+  <form id="editForm" style="display:none;">
+    <label>Title: <input name="title" required></label>
+    <label>Description: <textarea name="description"></textarea></label>
+    <label>Date & time: <input type="datetime-local" name="event_date" required></label>
+    <label>Hide exact location? <input type="checkbox" name="hide_location"></label>
+    <div id="locationPasswordGroup">
+    <label>New location password (leave blank to keep current): 
+        <input type="password" name="location_password" placeholder="Optional">
+    </label>
+    </div>
+    <label>Link: <input type="url" name="link"></label>
+    <label>Image URL: <input type="url" name="image_url"></label>
+    <input type="hidden" name="id" id="event-id">
+    <input type="hidden" name="password" id="event-password">
+    <button type="submit">Save changes</button>
+  </form>
+  <a href="/">← Back to events</a>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const eventId = urlParams.get('id');
+    if (!eventId) {
+      document.body.innerHTML = '<p>No event ID provided. <a href="/">Go back</a></p>';
+    }
+
+    async function loadEventData() {
+      const password = document.getElementById('password').value;
+      try {
+        const res = await fetch(`/api/events/${eventId}?password=${encodeURIComponent(password)}`);
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Failed to load event');
+        }
+        const event = await res.json();
+        // Populate form
+        document.getElementById('auth').style.display = 'none';
+        document.getElementById('editForm').style.display = 'block';
+        document.getElementById('event-id').value = event.id;
+        document.getElementById('event-password').value = password;
+        document.querySelector('[name="title"]').value = event.title || '';
+        document.querySelector('[name="description"]').value = event.description || '';
+        // Format date for datetime-local
+        if (event.event_date) {
+          const d = new Date(event.event_date);
+          const localDatetime = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+          document.querySelector('[name="event_date"]').value = localDatetime;
+        }
+        document.querySelector('[name="hide_location"]').checked = event.hide_location === 1;
+        document.querySelector('[name="link"]').value = event.link || '';
+        document.querySelector('[name="image_url"]').value = event.image_url || '';
+      } catch (e) {
+        document.getElementById('auth-error').textContent = e.message;
+      }
+    }
+
+    document.getElementById('editForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+      const payload = {
+        password: data.password,
+        title: data.title,
+        description: data.description || undefined,
+        event_date: data.event_date,
+        hide_location: data.hide_location === 'on',
+        link: data.link || undefined,
+        image_url: data.image_url || undefined,
+        location_password: data.location_password || undefined,
+      };
+      const res = await fetch(`/api/events/${data.id}/edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (res.ok) {
+        alert('Event updated!');
+        window.location.href = '/';
+      } else {
+        alert('Error: ' + result.error);
+      }
+    });
+  </script>
+</body>
+</html>

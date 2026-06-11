@@ -10,6 +10,7 @@ interface EventRow {
   link: string | null;
   image_url: string | null;
   password_hash: string;
+  location_password_hash: string | null;   // NEW
   status: string;
   approvals: number;
   reports: number;
@@ -34,9 +35,9 @@ export interface Env {
 }
 
 // ---------- Your city coords (edit!) ----------
-const CENTER_LAT = 45.4642;
-const CENTER_LON = 9.1900;
-const RADIUS_KM = 15;
+const CENTER_LAT = 43.7166;
+const CENTER_LON = 10.4000;
+const RADIUS_KM = 60;
 
 // ---------- Geo helper ----------
 function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -140,6 +141,7 @@ async function createEvent(request: Request, env: Env): Promise<Response> {
     link?: string;
     image_url?: string;
     password: string;
+    location_password?: string;  // NEW
     recaptcha: string;
   };
 
@@ -159,11 +161,20 @@ async function createEvent(request: Request, env: Env): Promise<Response> {
       return jsonResponse({ error: 'Event location outside allowed area' }, 400);
   }
 
+  // Require location password if hiding location
+  if (body.hide_location && !body.location_password) {
+    return jsonResponse({ error: 'A location password is required when hiding the location' }, 400);
+  }
+
   const passwordHash = await hashPassword(body.password);
+  const locationHash = body.hide_location && body.location_password
+    ? await hashPassword(body.location_password)
+    : null;
+
   const info = await env.events_db.prepare(
     `INSERT INTO events (title, description, event_date, latitude, longitude,
-                         hide_location, link, image_url, password_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                         hide_location, link, image_url, password_hash, location_password_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       body.title,
@@ -174,7 +185,8 @@ async function createEvent(request: Request, env: Env): Promise<Response> {
       body.hide_location ? 1 : 0,
       body.link || null,
       body.image_url || null,
-      passwordHash
+      passwordHash,
+      locationHash      // NEW
     )
     .run();
 
@@ -212,7 +224,7 @@ async function approveEvent(id: number, request: Request, env: Env): Promise<Res
     .bind(id)
     .first<{ approvals: number }>();
 
-  if (event && event.approvals >= 10) {
+  if (event && event.approvals >= 1) {
     await env.events_db.prepare("UPDATE events SET status = 'active' WHERE id = ?")
       .bind(id)
       .run();
@@ -243,7 +255,7 @@ async function reportEvent(id: number, request: Request, env: Env): Promise<Resp
     .bind(id)
     .first<{ title: string; reports: number }>();
 
-  if (event && event.reports >= 10) {
+  if (event && event.reports >= 1) {
     await env.events_db.prepare("UPDATE events SET status = 'hidden' WHERE id = ?")
       .bind(id)
       .run();
@@ -257,23 +269,36 @@ async function revealLocation(id: number, request: Request, env: Env): Promise<R
   if (!password) return jsonResponse({ error: 'Password required' }, 400);
 
   const event = await env.events_db.prepare(
-    'SELECT latitude, longitude, hide_location, password_hash FROM events WHERE id = ?'
+    'SELECT latitude, longitude, hide_location, location_password_hash FROM events WHERE id = ?'
   )
     .bind(id)
-    .first<EventRow>();
+    .first<{
+      latitude: number;
+      longitude: number;
+      hide_location: number;
+      location_password_hash: string | null;
+    }>();
 
-  if (!event || !event.hide_location)
+  if (!event || !event.hide_location) {
     return jsonResponse({ error: 'Location not hidden or event not found' }, 404);
+  }
 
-  if (!(await verifyPassword(password, event.password_hash)))
-    return jsonResponse({ error: 'Incorrect password' }, 403);
+  if (!event.location_password_hash) {
+    return jsonResponse({ error: 'No location password set for this event' }, 400);
+  }
 
-  return jsonResponse({ latitude: event.latitude, longitude: event.longitude });
+  const match = await verifyPassword(password, event.location_password_hash);
+  if (!match) return jsonResponse({ error: 'Incorrect location password' }, 403);
+
+  return jsonResponse({
+    latitude: event.latitude,
+    longitude: event.longitude,
+  });
 }
 
 async function editEvent(id: number, request: Request, env: Env): Promise<Response> {
   const body = (await request.json()) as {
-    password: string;
+    password: string;               // event password
     title?: string;
     description?: string;
     event_date?: string;
@@ -282,19 +307,24 @@ async function editEvent(id: number, request: Request, env: Env): Promise<Respon
     hide_location?: boolean;
     link?: string;
     image_url?: string;
+    location_password?: string;     // NEW
   };
-  if (!body.password) return jsonResponse({ error: 'Password required' }, 400);
 
-  const event = await env.events_db.prepare('SELECT password_hash FROM events WHERE id = ?')
-    .bind(id)
-    .first<{ password_hash: string }>();
+  if (!body.password) return jsonResponse({ error: 'Event password required' }, 400);
+
+  // Verify the event password
+  const event = await env.events_db.prepare(
+    'SELECT password_hash, location_password_hash FROM events WHERE id = ?'
+  ).bind(id).first<{ password_hash: string; location_password_hash: string | null }>();
   if (!event) return jsonResponse({ error: 'Event not found' }, 404);
 
-  if (!(await verifyPassword(body.password, event.password_hash)))
-    return jsonResponse({ error: 'Incorrect password' }, 403);
+  const match = await verifyPassword(body.password, event.password_hash);
+  if (!match) return jsonResponse({ error: 'Incorrect event password' }, 403);
 
+  // Build dynamic update query
   const fields: string[] = [];
   const params: any[] = [];
+
   if (body.title !== undefined) { fields.push('title = ?'); params.push(body.title); }
   if (body.description !== undefined) { fields.push('description = ?'); params.push(body.description); }
   if (body.event_date !== undefined) { fields.push('event_date = ?'); params.push(body.event_date); }
@@ -304,6 +334,19 @@ async function editEvent(id: number, request: Request, env: Env): Promise<Respon
   if (body.link !== undefined) { fields.push('link = ?'); params.push(body.link); }
   if (body.image_url !== undefined) { fields.push('image_url = ?'); params.push(body.image_url); }
 
+  // Handle location password
+  if (body.location_password !== undefined) {
+    if (body.location_password === '') {
+      // Remove location password
+      fields.push('location_password_hash = ?');
+      params.push(null);
+    } else {
+      const newLocHash = await hashPassword(body.location_password);
+      fields.push('location_password_hash = ?');
+      params.push(newLocHash);
+    }
+  }
+
   if (fields.length === 0) return jsonResponse({ error: 'No fields to update' }, 400);
 
   params.push(id);
@@ -312,6 +355,25 @@ async function editEvent(id: number, request: Request, env: Env): Promise<Respon
     .run();
 
   return jsonResponse({ success: true });
+}
+
+async function getEventData(id: number, request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const password = url.searchParams.get('password');
+  if (!password) return jsonResponse({ error: 'Password required' }, 400);
+
+  const event = await env.events_db.prepare(
+    'SELECT * FROM events WHERE id = ?'
+  ).bind(id).first<EventRow>();
+
+  if (!event) return jsonResponse({ error: 'Event not found' }, 404);
+
+  const match = await verifyPassword(password, event.password_hash);
+  if (!match) return jsonResponse({ error: 'Incorrect password' }, 403);
+
+  // Return everything except the password hash
+  const { password_hash, location_password_hash, ...safe } = event;
+  return jsonResponse(safe);
 }
 
 async function cancelEvent(id: number, request: Request, env: Env): Promise<Response> {
@@ -362,13 +424,14 @@ export default {
       });
     }
 
-    // Serve static assets if available (frontend pages)
-    if (env.ASSETS) {
-      const asset = await env.ASSETS.fetch(request);
-      if (asset.ok) return asset;   // if it's a real file, return it
+    // ---------- Serve static assets only for GET/HEAD ----------
+    if (env.ASSETS && (method === 'GET' || method === 'HEAD')) {
+      const assetResponse = await env.ASSETS.fetch(request);
+      if (assetResponse.ok) return assetResponse;
+      // If not found, fall through to API routes (e.g., /api/events could also be GET)
     }
 
-    // API routes
+    // ---------- API routes ----------
     const path = url.pathname;
     try {
       if (path === '/api/events' && method === 'GET') return await listEvents(env);
@@ -386,6 +449,12 @@ export default {
 
       const editMatch = path.match(/^\/api\/events\/(\d+)\/edit$/);
       if (editMatch && method === 'POST') return await editEvent(Number(editMatch[1]), request, env);
+
+      // New route: GET /api/events/:id?password=... → full event data (if password OK)
+      const editDataMatch = path.match(/^\/api\/events\/(\d+)$/);
+      if (editDataMatch && method === 'GET') {
+        return await getEventData(Number(editDataMatch[1]), request, env);
+      }
 
       const cancelMatch = path.match(/^\/api\/events\/(\d+)$/);
       if (cancelMatch && method === 'DELETE') return await cancelEvent(Number(cancelMatch[1]), request, env);
