@@ -1,48 +1,73 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Edit Event</title>
-  <style>
-    body { font-family: system-ui; max-width: 600px; margin: 0 auto; padding: 1rem; }
-    label { display: block; margin-top: 0.5rem; }
-    input, textarea, select { width: 100%; padding: 0.3rem; }
-    button { margin-top: 1rem; }
-    .error { color: red; }
-  </style>
+  <title>Modifica evento – NOTEV</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <h2>Edit Event</h2>
-  <div id="auth">
-    <label>Event password: <input type="password" id="password" required></label>
-    <button onclick="loadEventData()">Load event</button>
-    <p class="error" id="auth-error"></p>
-  </div>
-
-  <form id="editForm" style="display:none;">
-    <label>Title: <input name="title" required></label>
-    <label>Description: <textarea name="description"></textarea></label>
-    <label>Date & time: <input type="datetime-local" name="event_date" required></label>
-    <label>Hide exact location? <input type="checkbox" name="hide_location"></label>
-    <div id="locationPasswordGroup">
-    <label>New location password (leave blank to keep current): 
-        <input type="password" name="location_password" placeholder="Optional">
-    </label>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">NOT<span>EV</span></a>
+      <nav>
+        <a href="/">← Indietro</a>
+      </nav>
     </div>
-    <label>Link: <input type="url" name="link"></label>
-    <label>Image URL: <input type="url" name="image_url"></label>
-    <input type="hidden" name="id" id="event-id">
-    <input type="hidden" name="password" id="event-password">
-    <button type="submit">Save changes</button>
-  </form>
-  <a href="/">← Back to events</a>
+  </header>
+
+  <main class="container">
+    <div class="form-card" id="auth">
+      <h2>Modifica evento</h2>
+      <div class="form-group">
+        <label for="password">Password dell'evento</label>
+        <input type="password" id="password" required>
+      </div>
+      <button class="btn btn-primary" onclick="loadEventData()">Carica evento</button>
+      <p class="error-message" id="auth-error"></p>
+    </div>
+
+    <form id="editForm" class="form-card" style="display:none;">
+      <h2>Modifica dettagli</h2>
+      <div class="form-group">
+        <label for="edit-title">Titolo</label>
+        <input type="text" name="title" id="edit-title" required>
+      </div>
+      <div class="form-group">
+        <label for="edit-description">Descrizione</label>
+        <textarea name="description" id="edit-description" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="edit-event_date">Data e ora</label>
+        <input type="datetime-local" name="event_date" id="edit-event_date" required>
+      </div>
+      <div class="form-group checkbox-group">
+        <input type="checkbox" name="hide_location" id="edit-hide_location">
+        <label for="edit-hide_location">Nascondi posizione esatta</label>
+      </div>
+      <div class="form-group">
+        <label for="edit-link">Link</label>
+        <input type="url" name="link" id="edit-link">
+      </div>
+      <div class="form-group">
+        <label for="edit-image_url">URL immagine</label>
+        <input type="url" name="image_url" id="edit-image_url">
+      </div>
+      <div class="form-group">
+        <label for="edit-location_password">Nuova password posizione (lascia vuoto per non modificare)</label>
+        <input type="password" name="location_password" id="edit-location_password" placeholder="Opzionale">
+      </div>
+      <input type="hidden" name="id" id="event-id">
+      <input type="hidden" name="password" id="event-password">
+      <button type="submit" class="btn btn-primary" style="width:100%;">Salva modifiche</button>
+    </form>
+  </main>
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const eventId = urlParams.get('id');
     if (!eventId) {
-      document.body.innerHTML = '<p>No event ID provided. <a href="/">Go back</a></p>';
+      document.body.innerHTML = '<main class="container"><p>ID evento mancante. <a href="/">Torna indietro</a></p></main>';
     }
 
     async function loadEventData() {
@@ -51,25 +76,22 @@
         const res = await fetch(`/api/events/${eventId}?password=${encodeURIComponent(password)}`);
         if (!res.ok) {
           const err = await res.json();
-          throw new Error(err.error || 'Failed to load event');
+          throw new Error(err.error || 'Caricamento fallito');
         }
         const event = await res.json();
-        // Populate form
         document.getElementById('auth').style.display = 'none';
         document.getElementById('editForm').style.display = 'block';
         document.getElementById('event-id').value = event.id;
         document.getElementById('event-password').value = password;
-        document.querySelector('[name="title"]').value = event.title || '';
-        document.querySelector('[name="description"]').value = event.description || '';
-        // Format date for datetime-local
+        document.getElementById('edit-title').value = event.title || '';
+        document.getElementById('edit-description').value = event.description || '';
         if (event.event_date) {
           const d = new Date(event.event_date);
-          const localDatetime = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
-          document.querySelector('[name="event_date"]').value = localDatetime;
+          document.getElementById('edit-event_date').value = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
         }
-        document.querySelector('[name="hide_location"]').checked = event.hide_location === 1;
-        document.querySelector('[name="link"]').value = event.link || '';
-        document.querySelector('[name="image_url"]').value = event.image_url || '';
+        document.getElementById('edit-hide_location').checked = event.hide_location === 1;
+        document.getElementById('edit-link').value = event.link || '';
+        document.getElementById('edit-image_url').value = event.image_url || '';
       } catch (e) {
         document.getElementById('auth-error').textContent = e.message;
       }
@@ -96,10 +118,10 @@
       });
       const result = await res.json();
       if (res.ok) {
-        alert('Event updated!');
+        alert('Evento aggiornato!');
         window.location.href = '/';
       } else {
-        alert('Error: ' + result.error);
+        alert('Errore: ' + result.error);
       }
     });
   </script>

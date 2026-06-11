@@ -1,39 +1,194 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nord Ovest Toscana EVenti</title>
+  <title>NOTEV – Nord Ovest Toscana EVenti </title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 1rem; }
-    .event { border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; position: relative; }
-    .event .location-link { cursor: pointer; color: #2563eb; text-decoration: underline; }
-    .hidden-loc { color: #888; }
-    button, .btn { padding: 0.3rem 0.8rem; margin-right: 0.5rem; cursor: pointer; border: none; border-radius: 4px; }
-    .btn-edit { background: #f0f0f0; text-decoration: none; color: black; display: inline-block; }
-    .btn-report { background: #fee2e2; color: #b91c1c; }
+  <link rel="stylesheet" href="/style.css">
+<style>
+    /* Filter bar specific styles */
+    .filter-bar {
+        background: white;
+        border-radius: var(--radius);
+        padding: 1.2rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow);
+    }
+    .filter-bar summary {
+        font-weight: 600;
+        cursor: pointer;
+        color: var(--olive);
+        font-size: 1.1rem;
+    }
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+    .filter-group label {
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    .filter-group input, .filter-group select {
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+    }
+    .radius-slider {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .radius-slider input[type="range"] {
+        flex: 1;
+    }
+    .filter-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        justify-content: flex-end;
+    }
 
-    /* Modal styles */
-    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
-    .modal-content { background: white; margin: 5% auto; padding: 1rem; width: 90%; max-width: 600px; border-radius: 8px; position: relative; }
-    .close { position: absolute; top: 0.5rem; right: 1rem; font-size: 1.5rem; cursor: pointer; }
-    #modal-map { height: 300px; }
-  </style>
+    /* --- Map containers --- */
+    #modal-map, #picker-map {
+        height: 350px;
+        border-radius: 8px;
+    }
+
+    .map-hint {
+        font-size: 0.9rem;
+        color: #666;
+        margin: 0.5rem 0;
+    }
+
+    /* --- Event map modal (unchanged, display:none) --- */
+    #mapModal.modal {
+        display: none; /* hidden by default */
+        position: fixed;
+        z-index: 1000;
+        left: 0; top: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(4px);
+    }
+    .modal-content {
+        background: white;
+        margin: 5% auto;
+        padding: 1.5rem;
+        width: 90%;
+        max-width: 650px;
+        border-radius: var(--radius);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        position: relative;
+    }
+    .close {
+        position: absolute;
+        top: 0.8rem; right: 1rem;
+        font-size: 1.5rem; cursor: pointer; color: #999;
+    }
+    .close:hover { color: var(--dark); }
+    
+    /* --- Picker modal (standalone, no class conflict) --- */
+    #locationPickerModal {
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    /* hidden by default */
+    display: none;
+    /* when shown, we'll set display:flex to center content (optional) */
+    justify-content: center;
+    align-items: center;
+    }
+    #locationPickerModal.show {
+    display: flex;
+    }
+
+    #picker-map {
+    height: 350px;
+    width: 100%;
+    border-radius: 8px;
+    }
+
+    .github-link {
+    display: inline-block;
+    margin-top: 1rem;
+    color: var(--terracotta);
+    text-decoration: none;
+    font-weight: 600;
+    text-align: center;
+    }
+    .github-link:hover {
+    text-decoration: underline;
+    }
+</style>
 </head>
 <body>
-  <h1> _ __.-*°*-.__ NOTEV __.-*°*-.__ _ </h1>
-  <p>**NOTEV** cerca di risolvere un problema reale: avere una bacheca affidabile e aperta dove diffondere e trovare eventi dal basso. Su questa piattaforma  **chiunque** può aggiungere un evento, che poi apparirà sulla home page principale dopo aver ricevuto abbastanza approvazioni dalla comunità.
+  <header>
+    <div class="header-inner">
+        <a href="/" class="logo">_ __.-*°*-._ NOT<span>EV _.-*°*-.__ _</span></a>
+      <h5> Nord Ovest Toscana EVenti </h5>
+      <nav>
+        <a href="/create.html">+ Aggiungi evento</a>
+        <a href="/pending.html">§ Approva eventi</a>
+        <a href="#infoModal" onclick="openInfoModal()">? Info</a>
+      </nav>
+    </div>
+  </header>
 
-Lo scopo è quello di non lasciare a Meta o altre corporation la gestione della nostra socialità reale sul territorio, che nello specifico è il nord-ovest della toscana. L'augurio è che questo possa ispirare altre soluzioni su altri territori, come altre esperienze hanno ispirato questa.
+  <main class="container">
+    <h2 style="color: var(--olive); margin-bottom: 1rem; text-align: center;">Prossimi eventi</h2>
 
-Affinchè la piattaforma funzioni la sua diffusione deve passare dal reale, passaparola/stickers negli spazi che attraversiamo. </p>
-  <a href="/create.html">+ Add an event</a> |
-  <a href="/pending.html">Approve pending events</a>
-  <hr>
-  <div id="events">Loading...</div>
+    <!-- Filter Bar -->
+    <details class="filter-bar" id="filterDetails">
+      <summary>% Filtri</summary>
+      <div class="filter-grid">
+        <div class="filter-group">
+          <label for="date_from">Da</label>
+          <input type="date" id="date_from">
+        </div>
+        <div class="filter-group">
+          <label for="date_to">A</label>
+          <input type="date" id="date_to">
+        </div>
+        <div class="filter-group">
+          <label>
+            <input type="checkbox" id="exclude_hidden"> Escludi eventi con posizione nascosta
+          </label>
+        </div>
+      </div>
+      <div class="filter-group" style="margin-top:1rem;">
+        <label>Posizione (opzionale)</label>
+        <button type="button" class="btn btn-secondary" id="openMapPicker">@ Scegli punto sulla mappa</button>
+        <div id="locationStatus" style="font-size:0.85rem; color:#888; margin-top:0.3rem;"></div>
+      </div>
+      <div class="filter-group radius-slider" id="radiusGroup" style="display:none;">
+        <label>Raggio: <span id="radiusValue">5</span> km</label>
+        <input type="range" id="radius" min="1" max="10" value="5" step="1">
+      </div>
+      <input type="hidden" id="filter_lat">
+      <input type="hidden" id="filter_lng">
+      <div class="filter-actions">
+        <button class="btn btn-secondary" id="clearFilters">Cancella</button>
+        <button class="btn btn-primary" id="applyFilters">Applica filtri</button>
+      </div>
+    </details>
 
-  <!-- Map Modal -->
+    <!-- Events list -->
+    <div id="events">Caricamento...</div>
+  </main>
+
+  <!-- Event map modal (unchanged) -->
   <div id="mapModal" class="modal">
     <div class="modal-content">
       <span class="close" onclick="closeMapModal()">&times;</span>
@@ -41,99 +196,245 @@ Affinchè la piattaforma funzioni la sua diffusione deve passare dal reale, pass
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    const API_BASE = '/api';
-    let mapModal = document.getElementById('mapModal');
-    let modalMap = null;
+  <!-- Location picker modal -->
+  <div id="locationPickerModal">
+    <div class="modal-content">
+      <span class="close" onclick="closePickerModal()">&times;</span>
+      <h3 style="margin-bottom:0.5rem;">Seleziona il centro della ricerca</h3>
+      <div class="map-hint">Clicca sulla mappa per impostare il punto.</div>
+      <div id="picker-map"></div>
+      <div class="filter-actions" style="margin-top:1rem;">
+        <button class="btn btn-secondary" id="clearPicker">Nessun punto</button>
+        <button class="btn btn-primary" id="confirmPicker">Conferma punto</button>
+      </div>
+    </div>
+  </div>
 
-    // ---- Map Modal Functions ----
-    function openMapModal(lat, lng, title) {
-      mapModal.style.display = 'block';
-      if (!modalMap) {
-        modalMap = L.map('modal-map').setView([lat, lng], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(modalMap);
-      } else {
-        modalMap.setView([lat, lng], 15);
-      }
-      // Remove previous markers
-      modalMap.eachLayer(layer => { if (layer instanceof L.Marker) modalMap.removeLayer(layer); });
-      L.marker([lat, lng]).addTo(modalMap).bindPopup(title).openPopup();
+  <div id="infoModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeInfoModal()">&times;</span>
+              
+        <h5>NOTEV cerca di risolvere un problema reale: avere una bacheca affidabile e aperta dove diffondere e trovare eventi dal basso. Su questa piattaforma  **chiunque** può aggiungere un evento, che poi apparirà sulla home page principale dopo aver ricevuto abbastanza approvazioni dalla comunità.
+
+        Lo scopo è quello di non lasciare a Meta o altre corporation la gestione della nostra socialità reale sul territorio, che nello specifico è il nord-ovest della toscana. L'augurio è che questo possa ispirare altre soluzioni su altri territori, come altre esperienze hanno ispirato questa.
+
+        Affinchè la piattaforma funzioni la sua diffusione deve passare dal reale, passaparola/stickers negli spazi che attraversiamo. </h5>
+      <nav>
+        <a href="https://github.com/GiulianoDami/notev.git" target="_blank" class="github-link">*°*Go to GitHub Repo *°*</a>
+      </nav>
+    </div>
+  </div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const API_BASE = '/api';
+  const CENTER_LAT = 43.7166;   // your area center
+  const CENTER_LON = 10.4000;
+
+  // ========== Event map modal (works, keep as is) ==========
+  const mapModal = document.getElementById('mapModal');
+  let modalMap = null;
+
+  function openMapModal(lat, lng, title) {
+    mapModal.style.display = 'block';
+    if (!modalMap) {
+      modalMap = L.map('modal-map', { center: [lat, lng], zoom: 15 });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(modalMap);
+    } else {
+      modalMap.setView([lat, lng], 15);
     }
+    modalMap.eachLayer(layer => { if (layer instanceof L.Marker) modalMap.removeLayer(layer); });
+    L.marker([lat, lng]).addTo(modalMap).bindPopup(title).openPopup();
+    setTimeout(() => modalMap.invalidateSize(), 50);
+  }
 
-    function closeMapModal() {
-      mapModal.style.display = 'none';
+  function closeMapModal() {
+    mapModal.style.display = 'none';
+  }
+
+  function openInfoModal() {
+    document.getElementById('infoModal').style.display = 'block';
+  }
+
+  function closeInfoModal() {
+    document.getElementById('infoModal').style.display = 'none';
+  }
+
+  async function showHiddenLocation(eventId, eventTitle) {
+    const password = prompt('Inserisci la password per vedere la posizione:');
+    if (!password) return;
+    const res = await fetch(`${API_BASE}/events/${eventId}/reveal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      openMapModal(data.latitude, data.longitude, eventTitle);
+    } else {
+      alert('Errore: ' + (data.error || 'Password errata'));
     }
+  }
 
-    window.onclick = function(event) {
-      if (event.target == mapModal) closeMapModal();
-    }
+    // ========== Location picker modal (foolproof) ==========
+    const pickerModal = document.getElementById('locationPickerModal');
+    let pickerMap = null;
+    let pickerMarker = null;
 
-    // ---- Reveal hidden location ----
-    async function showHiddenLocation(eventId, eventTitle) {
-      const password = prompt('Enter the location password to see the map:');
-      if (!password) return; // cancelled
+    function showPicker() {
+    // 1. Make the modal visible
+    pickerModal.classList.add('show');
 
-      try {
-        const res = await fetch(`${API_BASE}/events/${eventId}/reveal`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          openMapModal(data.latitude, data.longitude, eventTitle);
-        } else {
-          alert('Error: ' + (data.error || 'Wrong password'));
+    // 2. Reset previous coordinates
+    confirmPickerBtn.dataset.lat = '';
+    confirmPickerBtn.dataset.lng = '';
+
+    // 3. Wait for the modal to be painted, then build the map
+    setTimeout(() => {
+        // If map already exists, just invalidate size and remove old marker
+        if (pickerMap) {
+        if (pickerMarker) {
+            pickerMap.removeLayer(pickerMarker);
+            pickerMarker = null;
         }
-      } catch (err) {
-        alert('Network error');
-      }
+        pickerMap.invalidateSize();
+        } else {
+        // First time: container is now visible and has height
+        pickerMap = L.map('picker-map', {
+            center: [CENTER_LAT, CENTER_LON],
+            zoom: 13,
+            zoomControl: true
+        });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(pickerMap);
+
+        // Click to place marker
+        pickerMap.on('click', function(e) {
+            if (pickerMarker) pickerMap.removeLayer(pickerMarker);
+            pickerMarker = L.marker(e.latlng).addTo(pickerMap);
+            confirmPickerBtn.dataset.lat = e.latlng.lat;
+            confirmPickerBtn.dataset.lng = e.latlng.lng;
+        });
+        }
+        // Final size adjustment
+        setTimeout(() => pickerMap.invalidateSize(), 50);
+    }, 200); // wait 200ms – enough for the modal to render
     }
 
-    // ---- Main event list ----
-    async function fetchJSON(path) {
-      const res = await fetch(API_BASE + path);
-      return res.json();
+    function hidePicker() {
+    pickerModal.classList.remove('show');
     }
 
-    async function loadEvents() {
-      const events = await fetchJSON('/events');
-      const container = document.getElementById('events');
-      if (!events.length) {
-        container.innerHTML = '<p>No upcoming events.</p>';
+    const openPickerBtn = document.getElementById('openMapPicker');
+    const confirmPickerBtn = document.getElementById('confirmPicker');
+    const clearPickerBtn = document.getElementById('clearPicker');
+
+    openPickerBtn.addEventListener('click', showPicker);
+    clearPickerBtn.addEventListener('click', () => {
+    document.getElementById('filter_lat').value = '';
+    document.getElementById('filter_lng').value = '';
+    document.getElementById('locationStatus').textContent = '';
+    document.getElementById('radiusGroup').style.display = 'none';
+    hidePicker();
+    });
+
+    confirmPickerBtn.addEventListener('click', () => {
+    const lat = parseFloat(confirmPickerBtn.dataset.lat);
+    const lng = parseFloat(confirmPickerBtn.dataset.lng);
+    if (isNaN(lat) || isNaN(lng)) {
+        alert('Seleziona un punto sulla mappa prima di confermare.');
         return;
-      }
-      container.innerHTML = events.map(e => `
-        <div class="event">
-          <h3>${escapeHtml(e.title)}</h3>
-          <p>${escapeHtml(e.description || '')}</p>
-          <p>📅 ${new Date(e.event_date).toLocaleString()}</p>
-          ${e.latitude 
-            ? `<p>📍 <span class="location-link" onclick="openMapModal(${e.latitude}, ${e.longitude}, '${escapeHtml(e.title)}')">Show on map</span></p>`
-            : `<p class="hidden-loc">📍 <span class="location-link" onclick="showHiddenLocation(${e.id}, '${escapeHtml(e.title)}')">Location hidden (click to reveal)</span></p>`
-          }
-          ${e.link ? `<p><a href="${escapeHtml(e.link)}" target="_blank">More info</a></p>` : ''}
-          <div style="margin-top:0.5rem;">
-            <a href="/edit.html?id=${e.id}" class="btn btn-edit">✏️ Edit</a>
-            <button class="btn btn-report" onclick="reportEvent(${e.id})">🚩 Report</button>
-          </div>
+    }
+    document.getElementById('filter_lat').value = lat;
+    document.getElementById('filter_lng').value = lng;
+    document.getElementById('locationStatus').textContent =
+        `Centro: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    document.getElementById('radiusGroup').style.display = 'flex';
+    document.getElementById('radiusValue').textContent = document.getElementById('radius').value;
+    hidePicker();
+    });
+
+  // ========== Filters & event loading ==========
+  document.getElementById('radius').addEventListener('input', function() {
+    document.getElementById('radiusValue').textContent = this.value;
+  });
+
+  function buildQueryString() {
+    const params = new URLSearchParams();
+    const dateFrom = document.getElementById('date_from').value;
+    const dateTo   = document.getElementById('date_to').value;
+    const lat      = document.getElementById('filter_lat').value;
+    const lng      = document.getElementById('filter_lng').value;
+    const radius   = document.getElementById('radius').value;
+    const excludeHidden = document.getElementById('exclude_hidden').checked;
+    if (dateFrom) params.set('date_from', dateFrom);
+    if (dateTo)   params.set('date_to', dateTo);
+    if (lat && lng && radius) {
+      params.set('lat', lat);
+      params.set('lng', lng);
+      params.set('radius', radius);
+    }
+    if (excludeHidden) params.set('exclude_hidden', '1');
+    return params.toString();
+  }
+
+  async function loadEvents() {
+    let url = API_BASE + '/events';
+    const qs = buildQueryString();
+    if (qs) url += '?' + qs;
+    const res = await fetch(url);
+    const events = await res.json();
+    const container = document.getElementById('events');
+    if (!events || !events.length) {
+      container.innerHTML = '<div class="empty-state">Nessun evento corrisponde ai filtri</div>';
+      return;
+    }
+    container.innerHTML = events.map(e => `
+      <div class="event-card">
+        <h3>${escapeHtml(e.title)}</h3>
+        <p>${escapeHtml(e.description || '')}</p>
+        <p class="event-date"># ${new Date(e.event_date).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}</p>
+        ${e.latitude 
+          ? `<p>@ <span class="location-link" onclick="openMapModal(${e.latitude}, ${e.longitude}, '${escapeHtml(e.title)}')">Mostra sulla mappa</span></p>`
+          : `<p class="hidden-loc">@ <span class="location-link" onclick="showHiddenLocation(${e.id}, '${escapeHtml(e.title)}')">Posizione nascosta (clicca per rivelare)</span></p>`
+        }
+        ${e.link ? `<p><a href="${escapeHtml(e.link)}" target="_blank"> --> Maggiori informazioni</a></p>` : ''}
+        <div class="event-actions">
+          <a href="/edit.html?id=${e.id}" class="btn btn-secondary">:: Modifica</a>
+          <button class="btn btn-danger" onclick="reportEvent(${e.id})">🚩 Segnala</button>
         </div>
-      `).join('');
-    }
+      </div>
+    `).join('');
+  }
 
-    async function reportEvent(id) {
-      await fetch(`${API_BASE}/events/${id}/report`, { method: 'POST' });
-      alert('Reported. If enough reports, the event will be hidden.');
-    }
+  async function reportEvent(id) {
+    await fetch(`${API_BASE}/events/${id}/report`, { method: 'POST' });
+    alert('Segnalato. Dopo 10 segnalazioni l\'evento verrà nascosto.');
+  }
 
-    function escapeHtml(text) {
-      return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
+  document.getElementById('applyFilters').addEventListener('click', loadEvents);
+  document.getElementById('clearFilters').addEventListener('click', () => {
+    document.getElementById('date_from').value = '';
+    document.getElementById('date_to').value = '';
+    document.getElementById('exclude_hidden').checked = false;
+    document.getElementById('filter_lat').value = '';
+    document.getElementById('filter_lng').value = '';
+    document.getElementById('radius').value = 5;
+    document.getElementById('locationStatus').textContent = '';
+    document.getElementById('radiusGroup').style.display = 'none';
+    document.getElementById('radiusValue').textContent = '5';
     loadEvents();
-  </script>
+  });
+
+  function escapeHtml(text) {
+    return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // Initial load
+  loadEvents();
+</script>
 </body>
 </html>

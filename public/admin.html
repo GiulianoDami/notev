@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amministrazione – NOTEV</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .hidden-event {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-radius: 8px;
+    }
+    .admin-key-area {
+      background: white;
+      padding: 1rem;
+      border-radius: var(--radius);
+      margin-bottom: 1.5rem;
+    }
+    .btn-warning {
+      background: #ffc107;
+      color: #333;
+    }
+    .btn-warning:hover { background: #e0a800; }
+    .btn-delete {
+      background: #dc3545;
+      color: white;
+    }
+    .btn-delete:hover { background: #c82333; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">NOT<span>EV</span></a>
+      <nav>
+        <a href="/">← Eventi</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <h2 style="color: var(--olive); margin-bottom: 1rem;">🛡️ Amministrazione – Eventi nascosti</h2>
+
+    <div class="admin-key-area">
+      <label for="adminKey"><strong>Chiave amministratore:</strong></label>
+      <input type="password" id="adminKey" style="width:100%; padding:0.5rem; margin-top:0.3rem;">
+      <button class="btn btn-primary" onclick="loadHidden()">Carica eventi nascosti</button>
+      <small style="color:gray;">La chiave viene salvata localmente nel browser.</small>
+    </div>
+
+    <div id="hiddenEvents"></div>
+  </main>
+
+  <script>
+    function getKey() {
+      return localStorage.getItem('adminKey') || '';
+    }
+    function saveKey() {
+      const key = document.getElementById('adminKey').value;
+      localStorage.setItem('adminKey', key);
+    }
+
+    async function loadHidden() {
+      saveKey();
+      const key = getKey();
+      if (!key) return alert('Inserisci la chiave amministratore.');
+
+      const res = await fetch(`/api/admin/hidden?key=${encodeURIComponent(key)}`);
+      if (!res.ok) {
+        alert('Accesso negato o errore.');
+        return;
+      }
+      const events = await res.json();
+      const container = document.getElementById('hiddenEvents');
+      if (!events.length) {
+        container.innerHTML = '<div class="empty-state">Nessun evento nascosto</div>';
+        return;
+      }
+      container.innerHTML = events.map(e => `
+        <div class="hidden-event">
+          <h3>${escapeHtml(e.title)}</h3>
+          <p>${escapeHtml(e.description || '')}</p>
+          <p>📅 ${new Date(e.event_date).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}</p>
+          <p>Segnalazioni: <strong>${e.reports}</strong> | Stato: ${e.status}</p>
+          <div class="event-actions" style="margin-top:0.5rem;">
+            <button class="btn btn-warning" onclick="resumeEvent(${e.id})">🔄 Ripristina (attivo)</button>
+            <button class="btn btn-delete" onclick="deleteEvent(${e.id})">🗑️ Elimina definitivamente</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function resumeEvent(id) {
+      if (!confirm('Ripristinare questo evento? Tornerà attivo con 0 segnalazioni.')) return;
+      const key = getKey();
+      const res = await fetch(`/api/admin/events/${id}/resume?key=${encodeURIComponent(key)}`, { method: 'POST' });
+      if (res.ok) {
+        alert('Evento ripristinato.');
+        loadHidden();
+      } else {
+        alert('Errore.');
+      }
+    }
+
+    async function deleteEvent(id) {
+      if (!confirm('Eliminare DEFINITIVAMENTE questo evento? L\'operazione è irreversibile.')) return;
+      const key = getKey();
+      const res = await fetch(`/api/admin/events/${id}/delete?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
+      if (res.ok) {
+        alert('Evento eliminato.');
+        loadHidden();
+      } else {
+        alert('Errore.');
+      }
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // Pre-fill admin key if saved
+    const savedKey = localStorage.getItem('adminKey');
+    if (savedKey) document.getElementById('adminKey').value = savedKey;
+  </script>
+</body>
+</html>

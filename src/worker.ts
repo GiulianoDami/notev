@@ -113,20 +113,64 @@ async function sendTelegram(env: Env, message: string): Promise<void> {
 }
 
 // ---------- Request handlers ----------
-async function listEvents(env: Env): Promise<Response> {
-  const { results } = await env.events_db.prepare(
-    `SELECT id, title, description, event_date, latitude, longitude,
-            hide_location, link, image_url, status, approvals, reports
-     FROM events
-     WHERE status = 'active' AND event_date >= datetime('now')
-     ORDER BY event_date ASC`
-  ).all<EventRow>();
+async function listEvents(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const params = url.searchParams;
 
-  const safe = results.map((e) => ({
+  const dateFrom = params.get('date_from');
+  const dateTo   = params.get('date_to');
+  const lat      = params.get('lat');
+  const lng      = params.get('lng');
+  const radiusKm = parseFloat(params.get('radius') || '0');
+  const excludeHidden = params.get('exclude_hidden') === '1';
+
+  let query = `SELECT id, title, description, event_date, latitude, longitude,
+                      hide_location, link, image_url, status, approvals, reports
+               FROM events
+               WHERE status = 'active' AND event_date >= datetime('now')`;
+  const bindings: any[] = [];
+
+  // Optional date filters
+  if (dateFrom) {
+    query += ` AND event_date >= ?`;
+    bindings.push(dateFrom);
+  }
+  if (dateTo) {
+    query += ` AND event_date <= ?`;
+    bindings.push(dateTo);
+  }
+
+  // Exclude hidden events if requested
+  if (excludeHidden) {
+    query += ` AND hide_location = 0`;
+  }
+
+  query += ` ORDER BY event_date ASC`;
+
+  // Fetch all matching events (we'll filter by location in JS)
+  const { results } = await env.events_db.prepare(query)
+    .bind(...bindings)
+    .all<EventRow>();
+
+  // If location filter is provided, apply Haversine distance filter
+  let filtered = results;
+  if (lat && lng && radiusKm > 0) {
+    const centerLat = parseFloat(lat);
+    const centerLng = parseFloat(lng);
+    filtered = results.filter(event => {
+      if (event.latitude === null || event.longitude === null) return false;
+      const dist = getDistanceKm(centerLat, centerLng, event.latitude, event.longitude);
+      return dist <= radiusKm;
+    });
+  }
+
+  // Return events, hiding coordinates for hidden events
+  const safe = filtered.map(e => ({
     ...e,
     latitude: e.hide_location ? null : e.latitude,
     longitude: e.hide_location ? null : e.longitude,
   }));
+
   return jsonResponse(safe);
 }
 
@@ -224,7 +268,7 @@ async function approveEvent(id: number, request: Request, env: Env): Promise<Res
     .bind(id)
     .first<{ approvals: number }>();
 
-  if (event && event.approvals >= 1) {
+  if (event && event.approvals >= 5) {
     await env.events_db.prepare("UPDATE events SET status = 'active' WHERE id = ?")
       .bind(id)
       .run();
@@ -255,11 +299,11 @@ async function reportEvent(id: number, request: Request, env: Env): Promise<Resp
     .bind(id)
     .first<{ title: string; reports: number }>();
 
-  if (event && event.reports >= 1) {
+  if (event && event.reports >= 5) {
     await env.events_db.prepare("UPDATE events SET status = 'hidden' WHERE id = ?")
       .bind(id)
       .run();
-    await sendTelegram(env, `Event "${event.title}" was hidden after 10 reports.`);
+    await sendTelegram(env, `Event "${event.title}" was hidden after 5 reports.`);
   }
   return jsonResponse({ success: true });
 }
@@ -407,6 +451,43 @@ function jsonResponse(data: any, status = 200): Response {
   });
 }
 
+async function listHidden(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const key = url.searchParams.get('key') || request.headers.get('X-Admin-Key');
+  if (key !== env.ADMIN_KEY) return jsonResponse({ error: 'Unauthorized' }, 401);
+
+  const { results } = await env.events_db.prepare(
+    `SELECT * FROM events WHERE status = 'hidden' ORDER BY created_at DESC`
+  ).all<EventRow>();
+  return jsonResponse(results);
+}
+
+async function resumeEvent(id: number, request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const key = url.searchParams.get('key') || request.headers.get('X-Admin-Key');
+  if (key !== env.ADMIN_KEY) return jsonResponse({ error: 'Unauthorized' }, 401);
+
+  // Set back to active and reset reports to 0 (otherwise it would hide again immediately)
+  await env.events_db.prepare(
+    "UPDATE events SET status = 'active', reports = 0 WHERE id = ?"
+  ).bind(id).run();
+
+  return jsonResponse({ success: true });
+}
+
+async function deleteEventPermanently(id: number, request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const key = url.searchParams.get('key') || request.headers.get('X-Admin-Key');
+  if (key !== env.ADMIN_KEY) return jsonResponse({ error: 'Unauthorized' }, 401);
+
+  // Delete votes first (foreign key reference)
+  await env.events_db.prepare('DELETE FROM votes WHERE event_id = ?').bind(id).run();
+  // Delete the event
+  await env.events_db.prepare('DELETE FROM events WHERE id = ?').bind(id).run();
+
+  return jsonResponse({ success: true });
+}
+
 // ---------- Main handler ----------
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -434,7 +515,7 @@ export default {
     // ---------- API routes ----------
     const path = url.pathname;
     try {
-      if (path === '/api/events' && method === 'GET') return await listEvents(env);
+      if (path === '/api/events' && method === 'GET') return await listEvents(request,env);
       if (path === '/api/events' && method === 'POST') return await createEvent(request, env);
       if (path === '/api/events/pending' && method === 'GET') return await listPending(env);
 
@@ -460,7 +541,23 @@ export default {
       if (cancelMatch && method === 'DELETE') return await cancelEvent(Number(cancelMatch[1]), request, env);
 
       if (path === '/api/admin' && method === 'GET') return await adminList(request, env);
+      
+      // Admin: list hidden events
+      if (path === '/api/admin/hidden' && method === 'GET') {
+        return await listHidden(request, env);
+      }
 
+      // Admin: resume hidden event (set back to active)
+      const resumeMatch = path.match(/^\/api\/admin\/events\/(\d+)\/resume$/);
+      if (resumeMatch && method === 'POST') {
+        return await resumeEvent(Number(resumeMatch[1]), request, env);
+      }
+
+      // Admin: permanently delete event
+      const deletePermMatch = path.match(/^\/api\/admin\/events\/(\d+)\/delete$/);
+      if (deletePermMatch && method === 'DELETE') {
+        return await deleteEventPermanently(Number(deletePermMatch[1]), request, env);
+      }
       return jsonResponse({ error: 'Not found' }, 404);
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unknown error';

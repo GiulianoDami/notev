@@ -1,18 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pending Events</title>
-  <style>
-    body { font-family: system-ui; max-width: 800px; margin: 0 auto; padding: 1rem; }
-    .event { border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; }
-  </style>
+  <title>Eventi in attesa – NOTEV</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <h2>Events waiting for approval</h2>
-  <div id="pending"></div>
-  <a href="/">← Back to events</a>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">NOT<span>EV</span></a>
+      <nav>
+        <a href="/">← Indietro</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <h2 style="color: var(--olive); margin-bottom: 1.5rem;">:. Eventi in attesa di approvazione</h2>
+    <div id="pending">Caricamento...</div>
+  </main>
 
   <script>
     async function loadPending() {
@@ -20,24 +27,30 @@
       const events = await res.json();
       const container = document.getElementById('pending');
       if (!events.length) {
-        container.innerHTML = '<p>No pending events.</p>';
+        container.innerHTML = '<div class="empty-state">Nessun evento in attesa</div>';
         return;
       }
       container.innerHTML = events.map(e => `
-        <div class="event">
-          <h3>${e.title}</h3>
-          <p>${e.description || ''}</p>
-          <p>📅 ${new Date(e.event_date).toLocaleString()}</p>
-          <p>Approvals: ${e.approvals}/10</p>
-          <button onclick="approve(${e.id})">✅ Approve</button>
+        <div class="event-card">
+          <h3>${escapeHtml(e.title)}</h3>
+          <p>${escapeHtml(e.description || '')}</p>
+          <p class="event-date"># ${new Date(e.event_date).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}</p>
+          <p>Approvazioni: <strong>${e.approvals}/5</strong></p>
+          <div class="event-actions">
+            <button class="btn btn-approve" onclick="approve(${e.id})">§ Approva</button>
+          </div>
         </div>
       `).join('');
     }
 
     async function approve(id) {
       await fetch(`/api/events/${id}/approve`, { method: 'POST' });
-      alert('Approved!');
-      loadPending(); // refresh
+      alert('Approvato!');
+      loadPending();
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     loadPending();

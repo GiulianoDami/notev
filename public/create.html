@@ -1,76 +1,109 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Add Event</title>
+  <title>Aggiungi evento – NOTEV</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    body { font-family: system-ui; max-width: 600px; margin: 0 auto; padding: 1rem; }
-    label { display: block; margin-top: 0.5rem; }
-    #map { height: 300px; margin: 1rem 0; }
-  </style>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <h2>Add a new event</h2>
-  <form id="createForm">
-    <label>Title: <input name="title" required></label>
-    <label>Description: <textarea name="description"></textarea></label>
-    <label>Date & time: <input type="datetime-local" name="event_date" required></label>
-    <label>Hide exact location? <input type="checkbox" name="hide_location" id="hideLocationCheck"></label>
-
-    <div id="locationPasswordGroup" style="display:none;">
-      <label>Location password (to share with attendees): 
-        <input type="password" name="location_password" placeholder="e.g., 'garden-party'">
-      </label>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">NOT<span>EV</span></a>
+      <nav>
+        <a href="/">← Indietro</a>
+      </nav>
     </div>
+  </header>
 
-    <label>Link: <input type="url" name="link"></label>
-    <label>Image URL: <input type="url" name="image_url"></label>
-    <label>Event password (for editing): <input type="password" name="password" required></label>
-    
-    <p>Click on the map to place the event location (allowed only inside the circle):</p>
-    <div id="map"></div>
-    <input type="hidden" name="latitude" id="lat">
-    <input type="hidden" name="longitude" id="lng">
+  <main class="container">
+    <div class="form-card">
+      <h2>Nuovo evento</h2>
+      <form id="createForm">
+        <div class="form-group">
+          <label for="title">Titolo *</label>
+          <input type="text" name="title" id="title" required>
+        </div>
 
-    <div class="g-recaptcha" data-sitekey="6Lf9uxctAAAAAP38JTMm0JuZNkihWaNUMEkyDDlf"></div>
-    <button type="submit">Submit Event</button>
-  </form>
-  <a href="/">← Back to events</a>
+        <div class="form-group">
+          <label for="description">Descrizione</label>
+          <textarea name="description" id="description" rows="3"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="event_date">Data e ora *</label>
+          <input type="datetime-local" name="event_date" id="event_date" required>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <input type="checkbox" name="hide_location" id="hideLocationCheck">
+          <label for="hideLocationCheck">Nascondi posizione esatta (servirà password per vederla)</label>
+        </div>
+
+        <div id="locationPasswordGroup" class="form-group" style="display:none;">
+          <label for="location_password">Password per sbloccare la posizione *</label>
+          <input type="password" name="location_password" id="location_password" placeholder="Condividi solo con i partecipanti">
+          <div class="form-hint">Verrà richiesta a chi vorrà vedere la mappa.</div>
+        </div>
+
+        <div class="form-group">
+          <label for="link">Link (opzionale)</label>
+          <input type="url" name="link" id="link" placeholder="https://...">
+        </div>
+
+        <div class="form-group">
+          <label for="image_url">URL immagine (opzionale)</label>
+          <input type="url" name="image_url" id="image_url" placeholder="https://...">
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password per modificare l'evento *</label>
+          <input type="password" name="password" id="password" required placeholder="Scegli una password">
+          <div class="form-hint">Ti servirà per modificare i dettagli in futuro.</div>
+        </div>
+
+        <p style="font-weight:600; margin: 1rem 0 0.5rem;">Clicca sulla mappa per impostare la posizione:</p>
+        <div id="map"></div>
+        <input type="hidden" name="latitude" id="lat">
+        <input type="hidden" name="longitude" id="lng">
+        <div class="form-hint">Solo punti all'interno del cerchio blu sono consentiti.</div>
+
+        <div class="g-recaptcha" data-sitekey="6Lf9uxctAAAAAP38JTMm0JuZNkihWaNUMEkyDDlf" style="margin: 1.5rem 0;"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;">Pubblica evento</button>
+      </form>
+    </div>
+  </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://www.google.com/recaptcha/api.js" async defer></script>
   <script>
-    // City centre and radius (must match your worker constants)
     const CENTER_LAT = 43.7166;
     const CENTER_LON = 10.4000;
     const RADIUS_KM = 60;
 
-    // Initialize map
     const map = L.map('map').setView([CENTER_LAT, CENTER_LON], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Draw allowed area circle
     L.circle([CENTER_LAT, CENTER_LON], {
       radius: RADIUS_KM * 1000,
-      color: 'blue',
-      fillOpacity: 0.05
+      color: '#c0523d',
+      fillColor: '#c0523d',
+      fillOpacity: 0.1
     }).addTo(map);
 
     let marker;
     map.on('click', function(e) {
       const lat = e.latlng.lat;
       const lng = e.latlng.lng;
-      // Check distance (rough, server will verify precisely)
       const dLat = (lat - CENTER_LAT) * Math.PI / 180;
       const dLon = (lng - CENTER_LON) * Math.PI / 180;
       const a = Math.sin(dLat/2)**2 + Math.cos(CENTER_LAT*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLon/2)**2;
       const dist = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       if (dist > RADIUS_KM) {
-        alert('Location is outside the allowed area. Please pick a point inside the blue circle.');
+        alert('Posizione fuori dall\'area consentita.');
         return;
       }
       if (marker) map.removeLayer(marker);
@@ -79,12 +112,14 @@
       document.getElementById('lng').value = lng;
     });
 
-    // Submit form
+    document.getElementById('hideLocationCheck').addEventListener('change', function() {
+      document.getElementById('locationPasswordGroup').style.display = this.checked ? 'block' : 'none';
+    });
+
     document.getElementById('createForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const formData = new FormData(e.target);
       const data = Object.fromEntries(formData.entries());
-      // Build JSON payload
       const payload = {
         title: data.title,
         description: data.description || undefined,
@@ -95,8 +130,8 @@
         link: data.link || undefined,
         image_url: data.image_url || undefined,
         password: data.password,
-        recaptcha: grecaptcha.getResponse(),
-        location_password: data.hide_location ? data.location_password : undefined,
+        location_password: data.hide_location === 'on' ? data.location_password : undefined,
+        recaptcha: grecaptcha.getResponse()
       };
 
       const res = await fetch('/api/events', {
@@ -106,15 +141,11 @@
       });
       const result = await res.json();
       if (res.ok) {
-        alert('Event created! It will appear after 10 approvals.');
+        alert('Evento creato! Apparirà dopo 10 approvazioni.');
         window.location.href = '/';
       } else {
-        alert('Error: ' + result.error);
+        alert('Errore: ' + result.error);
       }
-    });
-
-    document.getElementById('hideLocationCheck').addEventListener('change', function() {
-      document.getElementById('locationPasswordGroup').style.display = this.checked ? 'block' : 'none';
     });
   </script>
 </body>
